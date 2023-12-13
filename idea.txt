@@ -1,0 +1,38 @@
+--------------------------------------------------------------------
+Estructuras en Redis
+--------------------------------------------------------------------
+Generos&User := DictTrie<UserID, DictTrie<Fecha, SetTrie<Genero>>>
+Fechas&User := DictTrie<UserID, PriorityQueueMin<Fecha>>
+Rate&User := DictTrie<UserID, DictTrie<Fecha, SetTrie<Rate>>>
+--------------------------------------------------------------------
+Registro de datos
+--------------------------------------------------------------------
+Por cada registro <user_id, group_id, datetime>
+def registrarVista(registro: <user_id, group_id, datetime>):
+    user, group_id, date = registro
+    genre = getGenre(group_id)
+    rate = getRate(group_id)
+    redis::Generos&User.get(user).addOrDefine(date).add(genre) 
+    redis::Fechas&User.get(user).add(date)
+    if redis::Fechas&User.length > 90:
+        redis::Fechas&User.deque()  # O(lg 90) ~ O(1)
+    redis::Rate&User.get(user).addOrDefine(date).add(genre)
+    return  
+--------------------------------------------------------------------
+Consumo de datos
+--------------------------------------------------------------------
+def getGeneros&RateByUser(u):   
+    last90Dates := Array<Fecha>[90]
+    i := 0
+    while Fechas&User.get(u).hasNext() && i < 90:
+        last90Dates.agregar(Fechas&User.deque())
+        i++
+    genres := SetTrie<Genero>
+    maxRate := Pg
+    for date in last90Dates:
+        dateGenres := redis::Generos&User.get(u,date)       
+        rate := redis::Rate&User.get(u, date)           
+        genres.extend(dateGenres)           
+        if maxRate < rate:
+            maxRate := rate
+    return maxRate, genres
